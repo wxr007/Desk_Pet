@@ -8,8 +8,9 @@
 - **跨平台支持** - Windows 10+ / macOS 12+ / Linux Ubuntu 20.04+
 - **视频播放控制** - 循环播放、暂停、动画切换
 - **鼠标交互** - 单击切换、双击打开设置
+- **视频拖动** - 支持拖动视频窗口位置
 - **系统托盘管理** - 托盘图标菜单控制
-- **自定义设置** - 透明度、窗口大小、视频选择
+- **自定义设置** - 透明度、窗口大小、视频选择、绿幕参数
 - **GSAP 动画** - 流畅的动画效果
 - **异常捕获日志** - 完整的错误处理和日志记录
 
@@ -39,9 +40,9 @@ pnpm dev
 
 ### 基本操作
 
-- **单击宠物**: 切换动画
-- **双击宠物**: 打开设置面板
-- **拖拽顶部**: 移动窗口位置
+- **单击宠物**: 播放/暂停视频
+- **双击宠物**: 打开设置窗口
+- **拖动宠物**: 按住视频拖动可移动窗口位置
 - **托盘图标**: 右键菜单控制
 
 ### 添加视频
@@ -52,29 +53,44 @@ pnpm dev
 
 ### 绿幕设置
 
+- **启用绿幕**: 开启/关闭绿幕抠图效果
 - **抠图颜色**: 选择绿幕背景颜色（默认绿色 #00ff00）
 - **相似度**: 控制抠图范围（0-1）
 - **平滑度**: 控制边缘平滑程度（0-1）
+
+### 窗口设置
+
+- **透明度**: 调整窗口透明度（10%-100%）
+- **窗口置顶**: 窗口始终保持在最上层
+- **点击穿透**: 鼠标点击穿透窗口
+
+### 交互设置
+
+- **单击动作**: 设置单击视频时的行为（播放/暂停/切换视频）
+- **双击动作**: 设置双击视频时的行为（打开设置/无）
 
 ## 项目结构
 
 ```
 Desk_Pet/
 ├── src/
-│   ├── main/           # 主进程代码
-│   │   ├── main.js     # 入口文件
-│   │   ├── preload.js  # 预加载脚本
-│   │   ├── config-manager.js
-│   │   └── video-manager.js
-│   ├── renderer/       # 渲染进程代码
-│   │   ├── index.html
-│   │   ├── styles.css
-│   │   └── app.js
-│   └── assets/         # 资源文件
-│       ├── videos/     # 视频文件
-│       └── icons/      # 图标文件
-├── config/             # 配置文件
-├── logs/               # 日志文件
+│   ├── main/              # 主进程代码
+│   │   ├── main.js        # 主进程入口
+│   │   ├── preload.js     # 预加载脚本（IPC通信）
+│   │   ├── config-manager.js  # 配置管理
+│   │   └── video-manager.js   # 视频管理
+│   ├── renderer/          # 渲染进程代码
+│   │   ├── index.html     # 主窗口HTML
+│   │   ├── app.js         # 主窗口逻辑
+│   │   ├── styles.css     # 样式文件
+│   │   ├── settings.html  # 设置窗口HTML
+│   │   └── settings.js    # 设置窗口逻辑
+│   └── assets/            # 资源文件
+│       ├── videos/        # 视频文件
+│       └── icons/         # 图标文件
+├── config/                # 配置文件目录
+│   └── settings.json      # 用户配置
+├── out/                   # 构建输出目录
 ├── package.json
 └── README.md
 ```
@@ -123,19 +139,55 @@ pnpm publish
 - **macOS**: `out/make/` - 包含 `.dmg` 和 `.zip`
 - **Linux**: `out/make/` - 包含 `.deb`, `.rpm`, `.AppImage`
 
-## 性能指标
+## 配置说明
 
-- **打包体积**: ≤ 150MB
-- **内存占用**: ≤ 150MB
-- **启动时间**: ≤ 3 秒
+配置文件位于 `config/settings.json`，包含以下选项：
+
+```json
+{
+  "window": {
+    "width": 300,           // 窗口宽度
+    "height": 400,          // 窗口高度
+    "x": null,              // 窗口X位置（null为默认）
+    "y": null,              // 窗口Y位置（null为默认）
+    "opacity": 1.0,         // 透明度
+    "alwaysOnTop": true,    // 始终置顶
+    "clickThrough": false   // 点击穿透
+  },
+  "video": {
+    "folder": "...",        // 视频文件夹路径
+    "currentVideo": null,   // 当前播放的视频
+    "loop": true,           // 循环播放
+    "volume": 0,            // 音量
+    "playbackRate": 1.0,    // 播放速度
+    "chromaKey": {
+      "enabled": true,      // 启用绿幕
+      "color": "#00ff00",   // 抠图颜色
+      "similarity": 0.4,    // 相似度
+      "smoothness": 0.1     // 平滑度
+    }
+  },
+  "interaction": {
+    "singleClickAction": "play",    // 单击动作
+    "doubleClickAction": "settings", // 双击动作
+    "dragEnabled": true              // 启用拖动
+  },
+  "animation": {
+    "enabled": true,        // 启用动画
+    "idleAnimation": true,  // 空闲动画
+    "idleInterval": 30      // 空闲动画间隔（秒）
+  }
+}
+```
 
 ## 技术栈
 
-- **Electron** - 跨平台桌面应用框架
+- **Electron** ^29.1.1 - 跨平台桌面应用框架
 - **Electron Forge** - 应用构建和打包工具
-- **GSAP** - 专业动画库
+- **GSAP** ^3.12.5 - 专业动画库
 - **Canvas API** - 绿幕抠图渲染
-- **electron-log** - 日志记录
+- **electron-log** ^5.3.2 - 日志记录
+- **electron-squirrel-startup** - Windows 安装程序支持
 - **pnpm** - 包管理器
 
 ## 许可证
