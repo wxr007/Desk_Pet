@@ -53,6 +53,10 @@ class ConfigManager {
         hardwareAcceleration: true,
         frameSkip: 0,
         maxFps: 60
+      },
+      settingsWindow: {
+        x: null,
+        y: null
       }
     };
     this.config = null;

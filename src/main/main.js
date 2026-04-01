@@ -18,10 +18,14 @@ log.transports.console.level = 'debug';
 class DeskPetApp {
   constructor() {
     this.mainWindow = null;
+    this.settingsWindow = null;
     this.tray = null;
     this.configManager = new ConfigManager();
     this.videoManager = new VideoManager();
     this.isQuitting = false;
+    this.expectedWindowSize = null; // 期望的窗口大小
+    this.resizeDebounceTimer = null;
+    this.isRestoringSize = false; // 是否正在恢复大小
     
     this.init();
   }
@@ -124,12 +128,9 @@ class DeskPetApp {
       this.mainWindow = null;
     });
 
-    this.mainWindow.on('move', () => {
-      const bounds = this.mainWindow.getBounds();
-      this.configManager.set('window.x', bounds.x);
-      this.configManager.set('window.y', bounds.y);
-      this.configManager.save();
-    });
+
+
+    // 窗口移动时不再自动保存位置，只在应用退出时保存
 
     // 开发工具 - 始终打开以便调试
     this.mainWindow.webContents.openDevTools({ mode: 'detach' });
@@ -240,6 +241,20 @@ class DeskPetApp {
       }
     });
 
+    // 实时预览配置（不保存到文件）
+    ipcMain.handle('preview-config', (event, config) => {
+      try {
+        // 只应用配置，不保存
+        if (this.mainWindow) {
+          this.mainWindow.webContents.send('config-updated', config);
+        }
+        return { success: true };
+      } catch (error) {
+        log.error('预览配置失败:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
     // 获取视频列表
     ipcMain.handle('get-videos', async () => {
       log.info('收到获取视频列表请求');
@@ -250,7 +265,8 @@ class DeskPetApp {
 
     // 选择视频目录
     ipcMain.handle('select-video-folder', async () => {
-      const result = await dialog.showOpenDialog(this.mainWindow, {
+      const parentWindow = this.settingsWindow || this.mainWindow;
+      const result = await dialog.showOpenDialog(parentWindow, {
         properties: ['openDirectory'],
         title: '选择视频目录'
       });
@@ -264,17 +280,67 @@ class DeskPetApp {
       return { success: false };
     });
 
+    // 打开设置窗口
+    ipcMain.handle('open-settings-window', () => {
+      this.openSettings();
+    });
+
     // 窗口控制
+    // 拖动窗口
     ipcMain.handle('window-move', (event, { x, y }) => {
       if (this.mainWindow) {
-        this.mainWindow.setPosition(x, y);
+        // 保存期望的大小（首次拖动时，从配置中获取）
+        if (!this.expectedWindowSize) {
+          const config = this.configManager.get();
+          this.expectedWindowSize = {
+            width: config.window.width,
+            height: config.window.height
+          };
+          const currentBounds = this.mainWindow.getBounds();
+          console.log('[主进程] 拖动开始 - 当前大小:', currentBounds.width, currentBounds.height);
+          console.log('[主进程] 拖动开始 - 期望大小:', this.expectedWindowSize);
+        }
+        
+        // 使用 setBounds 同时设置位置和大小，避免 Electron 自动调整
+        this.mainWindow.setBounds({
+          x: Math.round(x),
+          y: Math.round(y),
+          width: this.expectedWindowSize.width,
+          height: this.expectedWindowSize.height
+        });
       }
+    });
+
+    // 拖动结束
+    ipcMain.handle('window-move-end', () => {
+      console.log('[主进程] 拖动结束，清除期望大小');
+      if (this.mainWindow) {
+        const config = this.configManager.get();
+        const currentBounds = this.mainWindow.getBounds();
+        console.log('[主进程] 拖动结束当前大小:', currentBounds.width, currentBounds.height);
+        console.log('[主进程] 期望大小:', config.window.width, config.window.height);
+        
+        // 恢复窗口大小
+        if (currentBounds.width !== config.window.width || currentBounds.height !== config.window.height) {
+          this.mainWindow.setSize(config.window.width, config.window.height);
+          console.log('[主进程] 恢复窗口大小到:', config.window.width, config.window.height);
+        }
+      }
+      this.expectedWindowSize = null;
     });
 
     ipcMain.handle('window-resize', (event, { width, height }) => {
       if (this.mainWindow) {
         this.mainWindow.setSize(width, height);
       }
+    });
+
+    ipcMain.handle('get-window-position', () => {
+      if (this.mainWindow) {
+        const pos = this.mainWindow.getPosition();
+        return { x: pos[0], y: pos[1] };
+      }
+      return { x: 0, y: 0 };
     });
 
     // 鼠标穿透控制
@@ -328,11 +394,78 @@ class DeskPetApp {
   }
 
   openSettings() {
-    if (!this.mainWindow) return;
+    if (this.settingsWindow) {
+      this.settingsWindow.focus();
+      return;
+    }
+
+    const config = this.configManager.get();
+    const { width, height } = screen.getPrimaryDisplay().workAreaSize;
     
-    this.mainWindow.webContents.send('open-settings');
-    this.mainWindow.show();
-    this.mainWindow.focus();
+    // 使用保存的设置窗口位置，如果没有则使用默认位置
+    let settingsX = config.settingsWindow?.x;
+    let settingsY = config.settingsWindow?.y;
+    
+    // 如果没有保存位置，则根据主窗口位置计算
+    if (settingsX === null || settingsY === null) {
+      settingsX = config.window.x ? config.window.x - 470 : width - 470 - 20;
+      settingsY = config.window.y ?? height - 650 - 20;
+    }
+    
+    this.settingsWindow = new BrowserWindow({
+      width: 450,
+      height: 650,
+      x: settingsX,
+      y: settingsY,
+      frame: false,
+      title: 'DeskPet 设置',
+      resizable: true,
+      minimizable: false,
+      maximizable: false,
+      parent: this.mainWindow,
+      transparent: true,
+      backgroundColor: '#2d2d2d',
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        preload: path.join(__dirname, 'preload.js')
+      }
+    });
+
+    this.settingsWindow.loadFile(path.join(__dirname, '../renderer/settings.html'));
+
+    // 保存设置窗口位置
+    const saveSettingsWindowPosition = () => {
+      if (this.settingsWindow && !this.settingsWindow.isDestroyed()) {
+        const pos = this.settingsWindow.getPosition();
+        this.configManager.set('settingsWindow.x', pos[0]);
+        this.configManager.set('settingsWindow.y', pos[1]);
+        this.configManager.save();
+      }
+    };
+    
+    this.settingsWindow.on('moved', saveSettingsWindowPosition);
+
+    // 在关闭前保存位置
+    this.settingsWindow.on('close', () => {
+      saveSettingsWindowPosition();
+    });
+
+    this.settingsWindow.on('closed', () => {
+      this.settingsWindow = null;
+    });
+
+    // 通知主窗口设置窗口已打开
+    if (this.mainWindow) {
+      this.mainWindow.webContents.send('settings-window-opened');
+    }
+  }
+
+  closeSettings() {
+    if (this.settingsWindow) {
+      this.settingsWindow.close();
+      this.settingsWindow = null;
+    }
   }
 
   togglePlayPause() {
