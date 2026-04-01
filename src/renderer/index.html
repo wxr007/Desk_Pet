@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: file:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src 'self' file: data:;">
+  <title>DeskPet - 桌面宠物</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- 主容器 -->
+  <div id="app" class="app">
+    <!-- 视频容器 -->
+    <div id="video-container" class="video-container">
+      <canvas id="chroma-canvas" class="chroma-canvas"></canvas>
+      <video 
+        id="pet-video" 
+        class="pet-video"
+        playsinline
+        muted
+        loop
+        preload="auto"
+      ></video>
+    </div>
+    
+    <!-- 拖拽区域 -->
+    <div id="drag-area" class="drag-area"></div>
+    
+    <!-- 控制按钮 -->
+    <div id="controls" class="controls">
+      <button id="btn-play-pause" class="control-btn" title="播放/暂停">
+        <span class="icon">⏸</span>
+      </button>
+      <button id="btn-switch" class="control-btn" title="切换动画">
+        <span class="icon">🎬</span>
+      </button>
+      <button id="btn-settings" class="control-btn" title="设置">
+        <span class="icon">⚙</span>
+      </button>
+    </div>
+    
+    <!-- 加载指示器 -->
+    <div id="loading" class="loading hidden">
+      <div class="spinner"></div>
+      <span class="loading-text">加载中...</span>
+    </div>
+    
+    <!-- 设置面板 -->
+    <div id="settings-panel" class="settings-panel hidden">
+      <div class="settings-header">
+        <h3>设置</h3>
+        <button id="btn-close-settings" class="close-btn">×</button>
+      </div>
+      
+      <div class="settings-content">
+        <!-- 视频设置 -->
+        <section class="settings-section">
+          <h4>视频设置</h4>
+          <div class="setting-item">
+            <label>视频目录</label>
+            <div class="input-group">
+              <input type="text" id="video-folder" readonly>
+              <button id="btn-select-folder">选择</button>
+            </div>
+          </div>
+          <div class="setting-item">
+            <label>当前视频</label>
+            <select id="video-select"></select>
+          </div>
+          <div class="setting-item">
+            <label>循环播放</label>
+            <input type="checkbox" id="video-loop" checked>
+          </div>
+        </section>
+        
+        <!-- 绿幕设置 -->
+        <section class="settings-section">
+          <h4>绿幕设置</h4>
+          <div class="setting-item">
+            <label>启用绿幕</label>
+            <input type="checkbox" id="chroma-enabled" checked>
+          </div>
+          <div class="setting-item">
+            <label>抠图颜色</label>
+            <input type="color" id="chroma-color" value="#00ff00">
+          </div>
+          <div class="setting-item">
+            <label>相似度</label>
+            <input type="range" id="chroma-similarity" min="0" max="1" step="0.01" value="0.4">
+            <span class="value-display" id="similarity-value">0.4</span>
+          </div>
+          <div class="setting-item">
+            <label>平滑度</label>
+            <input type="range" id="chroma-smoothness" min="0" max="1" step="0.01" value="0.1">
+            <span class="value-display" id="smoothness-value">0.1</span>
+          </div>
+        </section>
+        
+        <!-- 窗口设置 -->
+        <section class="settings-section">
+          <h4>窗口设置</h4>
+          <div class="setting-item">
+            <label>透明度</label>
+            <input type="range" id="window-opacity" min="0.1" max="1" step="0.05" value="1">
+            <span class="value-display" id="opacity-value">100%</span>
+          </div>
+          <div class="setting-item">
+            <label>窗口宽度</label>
+            <input type="range" id="window-width" min="100" max="800" step="10" value="300">
+            <span class="value-display" id="width-value">300px</span>
+          </div>
+          <div class="setting-item">
+            <label>窗口高度</label>
+            <input type="range" id="window-height" min="100" max="800" step="10" value="400">
+            <span class="value-display" id="height-value">400px</span>
+          </div>
+          <div class="setting-item">
+            <label>置顶显示</label>
+            <input type="checkbox" id="window-always-top" checked>
+          </div>
+          <div class="setting-item">
+            <label>鼠标穿透</label>
+            <input type="checkbox" id="window-click-through">
+          </div>
+        </section>
+        
+        <!-- 交互设置 -->
+        <section class="settings-section">
+          <h4>交互设置</h4>
+          <div class="setting-item">
+            <label>单击动作</label>
+            <select id="click-action">
+              <option value="switch">切换动画</option>
+              <option value="play">播放/暂停</option>
+              <option value="none">无</option>
+            </select>
+          </div>
+          <div class="setting-item">
+            <label>双击动作</label>
+            <select id="dblclick-action">
+              <option value="settings">打开设置</option>
+              <option value="switch">切换动画</option>
+              <option value="none">无</option>
+            </select>
+          </div>
+        </section>
+        
+        <!-- 动画设置 -->
+        <section class="settings-section">
+          <h4>动画设置</h4>
+          <div class="setting-item">
+            <label>启用 GSAP 动画</label>
+            <input type="checkbox" id="animation-enabled" checked>
+          </div>
+          <div class="setting-item">
+            <label>闲置动画</label>
+            <input type="checkbox" id="idle-animation" checked>
+          </div>
+        </section>
+      </div>
+      
+      <div class="settings-footer">
+        <button id="btn-reset" class="btn-secondary">重置</button>
+        <button id="btn-save" class="btn-primary">保存</button>
+      </div>
+    </div>
+  </div>
+  
+  <script src="../../node_modules/gsap/dist/gsap.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

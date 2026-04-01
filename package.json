@@ -1,0 +1,128 @@
+{
+  "name": "desk-pet",
+  "version": "1.0.0",
+  "description": "绿幕视频桌面宠物 - Green Screen Desktop Pet",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "chcp 65001 >nul && electron-forge start",
+    "dev": "chcp 65001 >nul && electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "make:win": "electron-forge make --platform=win32",
+    "make:mac": "electron-forge make --platform=darwin",
+    "make:linux": "electron-forge make --platform=linux",
+    "publish": "electron-forge publish",
+    "lint": "echo 'No linter configured'"
+  },
+  "keywords": [
+    "electron",
+    "desktop-pet",
+    "green-screen",
+    "transparent-window",
+    "gsap"
+  ],
+  "author": "DeskPet Team",
+  "license": "MIT",
+  "packageManager": "pnpm@10.33.0",
+  "devDependencies": {
+    "@electron-forge/cli": "^7.3.0",
+    "@electron-forge/maker-deb": "^7.3.0",
+    "@electron-forge/maker-dmg": "^7.3.0",
+    "@electron-forge/maker-rpm": "^7.3.0",
+    "@electron-forge/maker-squirrel": "^7.3.0",
+    "@electron-forge/maker-zip": "^7.3.0",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.3.0",
+    "@electron-forge/plugin-fuses": "^7.3.0",
+    "@electron-forge/publisher-github": "^7.3.0",
+    "@electron/fuses": "^1.8.0",
+    "electron": "^29.1.1",
+    "electron-log": "^5.0.0",
+    "gsap": "^3.12.0"
+  },
+  "dependencies": {
+    "electron-squirrel-startup": "^1.0.1"
+  },
+  "config": {
+    "forge": {
+      "packagerConfig": {
+        "asar": true,
+        "icon": "src/assets/icons/icon",
+        "extraResource": [
+          "src/assets"
+        ]
+      },
+      "rebuildConfig": {},
+      "makers": [
+        {
+          "name": "@electron-forge/maker-squirrel",
+          "config": {
+            "name": "DeskPet",
+            "setupIcon": "src/assets/icons/icon.ico",
+            "loadingGif": "src/assets/icons/loading.gif"
+          }
+        },
+        {
+          "name": "@electron-forge/maker-zip",
+          "platforms": [
+            "darwin",
+            "linux",
+            "win32"
+          ]
+        },
+        {
+          "name": "@electron-forge/maker-deb",
+          "config": {
+            "options": {
+              "maintainer": "DeskPet Team",
+              "homepage": "https://github.com/desktoppet",
+              "icon": "src/assets/icons/icon.png",
+              "categories": [
+                "Game",
+                "Amusement"
+              ]
+            }
+          }
+        },
+        {
+          "name": "@electron-forge/maker-rpm",
+          "config": {
+            "options": {
+              "homepage": "https://github.com/desktoppet",
+              "icon": "src/assets/icons/icon.png"
+            }
+          }
+        },
+        {
+          "name": "@electron-forge/maker-dmg",
+          "config": {
+            "format": "ULFO",
+            "icon": "src/assets/icons/icon.icns"
+          }
+        }
+      ],
+      "plugins": [
+        {
+          "name": "@electron-forge/plugin-auto-unpack-natives",
+          "config": {}
+        },
+        {
+          "name": "@electron-forge/plugin-fuses",
+          "config": {
+            "version": "^1.8.0",
+            "resetAdHocDarwinSignature": true,
+            "runAsNode": false,
+            "enableCookieEncryption": true,
+            "enableNodeOptionsEnvironmentVariable": false,
+            "enableNodeCliInspectArguments": false,
+            "enableEmbeddedAsarIntegrityValidation": true,
+            "onlyLoadAppFromAsar": true
+          }
+        }
+      ]
+    }
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=10.0.0"
+  }
+}
