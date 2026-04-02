@@ -46,21 +46,16 @@ class DeskPetApp {
       
       await this.loadConfig();
       console.log('配置加载完成');
-      await this.loadVideos();
-      console.log('视频列表加载完成');
       this.setupEventListeners();
       this.setupIPC();
       this.setupGSAPAnimations();
-      
-      // 加载第一个视频
-      this.log('info', `准备加载视频，视频数量: ${this.videos.length}`);
-      if (this.videos.length > 0) {
-        this.log('info', '开始播放第一个视频');
-        await this.playVideo(0);
-      } else {
-        this.log('warn', '没有找到视频文件');
-      }
-      
+      console.log('事件监听设置完成');
+      await this.loadVideos();
+      console.log('视频列表加载完成');
+
+      // 初始化时根据当前状态播放动画（在 loadVideos 中已完成）
+      // 不需要再播放第一个视频，因为 initializePetState 已经处理了
+
       this.log('info', 'DeskPet 应用初始化完成');
     } catch (error) {
       this.log('error', '初始化失败', error);
@@ -103,6 +98,9 @@ class DeskPetApp {
 
       // 分类视频
       this.categorizeVideos();
+
+      // 初始化时根据当前状态播放动画
+      await this.initializePetState();
 
       // 启动宠物自动行为
       this.startPetBehavior();
@@ -174,6 +172,7 @@ class DeskPetApp {
     const { video, btnSwitch, btnSettings } = this.elements;
 
     video.addEventListener('loadeddata', () => {
+      console.log('[video] loadeddata 事件触发');
       this.hideLoading();
       this.isPlaying = true;
       this.startChromaRender();
@@ -181,7 +180,17 @@ class DeskPetApp {
 
     video.addEventListener('error', (e) => {
       this.hideLoading();
-      this.log('error', '视频加载失败', e);
+      const error = e.target.error;
+      let errorMsg = '未知错误';
+      if (error) {
+        switch (error.code) {
+          case 1: errorMsg = 'MEDIA_ERR_ABORTED - 用户中止'; break;
+          case 2: errorMsg = 'MEDIA_ERR_NETWORK - 网络错误'; break;
+          case 3: errorMsg = 'MEDIA_ERR_DECODE - 解码错误'; break;
+          case 4: errorMsg = 'MEDIA_ERR_SRC_NOT_SUPPORTED - 格式不支持'; break;
+        }
+      }
+      this.log('error', '视频加载失败: ' + errorMsg, { code: error?.code, message: error?.message });
     });
 
     video.addEventListener('ended', () => {
@@ -350,8 +359,16 @@ class DeskPetApp {
   }
 
   startChromaRender() {
-    if (!this.chromaKey || this.chromaKey.animationId) return;
+    if (!this.chromaKey) {
+      console.log('[startChromaRender] 跳过: chromaKey 未初始化');
+      return;
+    }
+    if (this.chromaKey.animationId) {
+      console.log('[startChromaRender] 跳过: 已经在渲染中');
+      return;
+    }
     
+    console.log('[startChromaRender] 开始绿幕渲染');
     const render = () => {
       this.renderChromaFrame();
       this.chromaKey.animationId = requestAnimationFrame(render);
@@ -368,11 +385,20 @@ class DeskPetApp {
   }
 
   renderChromaFrame() {
-    if (!this.chromaKey || !this.elements.video) return;
+    if (!this.chromaKey || !this.elements.video) {
+      console.log('[renderChromaFrame] 跳过: chromaKey=', !!this.chromaKey, ', video=', !!this.elements.video);
+      return;
+    }
     
     const { canvas, ctx } = this.chromaKey;
     const video = this.elements.video;
-    const config = this.config.video.chromaKey;
+    const config = this.config?.video?.chromaKey;
+    
+    // 检查视频是否准备好
+    if (video.readyState < 2) {
+      console.log('[renderChromaFrame] 视频未准备好, readyState:', video.readyState);
+      return;
+    }
     
     // 清空画布
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -503,7 +529,9 @@ class DeskPetApp {
 
   // 开始宠物自动行为循环
   startPetBehavior() {
+    console.log('[startPetBehavior] 启动宠物行为');
     if (this.stateTimer) {
+      console.log('[startPetBehavior] 清除之前的定时器');
       clearTimeout(this.stateTimer);
     }
     this.scheduleNextBehavior();
@@ -520,18 +548,47 @@ class DeskPetApp {
 
   // 安排下一个行为
   scheduleNextBehavior() {
+    console.log('[scheduleNextBehavior] 当前状态:', this.petState);
     if (this.petState === 'idle') {
       // 坐着状态，3-6秒后起来走走
       const delay = 3000 + Math.random() * 3000;
+      console.log('[scheduleNextBehavior] 坐着状态，', delay, 'ms后走路');
       this.stateTimer = setTimeout(() => {
+        console.log('[scheduleNextBehavior] 定时器触发，开始走路');
         this.startWalking();
       }, delay);
     } else {
       // 走路状态，3-5秒后坐下
       const delay = 3000 + Math.random() * 2000;
+      console.log('[scheduleNextBehavior] 走路状态，', delay, 'ms后坐下');
       this.stateTimer = setTimeout(() => {
+        console.log('[scheduleNextBehavior] 定时器触发，开始坐着');
         this.startSitting();
       }, delay);
+    }
+  }
+
+  // 初始化宠物状态
+  async initializePetState() {
+    console.log('[初始化] 初始化宠物状态');
+    // 默认从坐着开始
+    this.petState = 'idle';
+    this.petDirection = 'none';
+
+    // 清除镜像翻转
+    this.elements.video.style.transform = '';
+    this.elements.canvas.style.transform = '';
+
+    // 播放坐着动画
+    if (this.videoCategories.sit.length > 0) {
+      const randomIndex = Math.floor(Math.random() * this.videoCategories.sit.length);
+      const videoIndex = this.videoCategories.sit[randomIndex];
+      await this.playVideo(videoIndex);
+      console.log('[初始化] 播放坐着动画');
+    } else if (this.videos.length > 0) {
+      // 如果没有坐着动画，播放第一个视频
+      await this.playVideo(0);
+      console.log('[初始化] 没有坐着动画，播放第一个视频');
     }
   }
 
@@ -816,7 +873,7 @@ class DeskPetApp {
       this.log('info', '视频加载成功', video.path);
     } catch (error) {
       this.hideLoading();
-      this.log('error', '播放视频失败', error);
+      this.log('error', '播放视频失败: ' + (error.message || error), { name: error.name, message: error.message });
     }
   }
 

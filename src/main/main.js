@@ -398,11 +398,18 @@ class DeskPetApp {
     // 日志记录
     ipcMain.on('log', (event, { level, message, data }) => {
       if (log[level]) {
-        log[level](message, data);
+        // 确保对象被正确序列化
+        const formattedData = data !== undefined ? (typeof data === 'object' ? JSON.stringify(data) : data) : '';
+        if (formattedData) {
+          log[level](message, formattedData);
+        } else {
+          log[level](message);
+        }
       }
     });
 
     log.info('IPC 通信设置完成');
+    log.info('日志文件位置:', log.transports.file.getFile().path);
   }
 
   updateIgnoreMouseEvents() {
