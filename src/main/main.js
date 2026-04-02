@@ -479,10 +479,9 @@ class DeskPetApp {
       y: settingsY,
       frame: false,
       title: 'DeskPet 设置',
-      resizable: true,
+      resizable: false,
       minimizable: false,
       maximizable: false,
-      parent: this.mainWindow,
       transparent: true,
       backgroundColor: '#2d2d2d',
       webPreferences: {

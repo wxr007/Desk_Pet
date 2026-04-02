@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=450, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
   <title>DeskPet 设置</title>
   <style>
@@ -88,8 +88,27 @@
 
     .settings-container {
       flex: 1;
-      padding: 16px 20px;
+      padding: 16px 20px 0 20px;
       overflow-y: auto;
+    }
+
+    /* 自定义滚动条 */
+    .settings-container::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .settings-container::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 4px;
+    }
+
+    .settings-container::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+    }
+
+    .settings-container::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.3);
     }
 
     h3 {
@@ -276,11 +295,10 @@
       display: flex;
       justify-content: flex-end;
       gap: 12px;
-      padding-top: 16px;
+      padding: 16px 20px;
       border-top: 1px solid rgba(255, 255, 255, 0.1);
-      position: sticky;
-      bottom: 0;
       background: #2d2d2d;
+      flex-shrink: 0;
     }
 
     select option {
@@ -404,10 +422,11 @@
       </div>
     </section>
     
-    <div class="settings-footer">
-      <button id="btn-reset" class="btn-secondary">重置</button>
-      <button id="btn-save" class="btn-primary">保存</button>
-    </div>
+  </div>
+
+  <div class="settings-footer">
+    <button id="btn-reset" class="btn-secondary">重置</button>
+    <button id="btn-save" class="btn-primary">保存</button>
   </div>
 
   <script src="settings.js"></script>
