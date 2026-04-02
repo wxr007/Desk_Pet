@@ -16,6 +16,7 @@ class DeskPetApp {
     this.chromaKey = null;
     this.gsap = null;
     this.elements = {};
+    this.activeVideo = null; // 当前活跃的 video 元素（双缓冲）
 
     // 动画状态管理
     this.petState = 'idle'; // 'idle' | 'walking'
@@ -38,6 +39,7 @@ class DeskPetApp {
       console.log('GSAP 状态:', this.gsap ? '已加载' : '未加载');
       
       this.cacheElements();
+      this.activeVideo = this.elements.video;
       console.log('DOM 元素缓存完成');
       
       // 先设置 ChromaKey，因为 loadConfig 中的 applyConfig 需要用到
@@ -67,6 +69,7 @@ class DeskPetApp {
       app: document.getElementById('app'),
       videoContainer: document.getElementById('video-container'),
       video: document.getElementById('pet-video'),
+      videoAlt: document.getElementById('pet-video-alt'),
       canvas: document.getElementById('chroma-canvas'),
       dragArea: document.getElementById('drag-area'),
       controls: document.getElementById('controls'),
@@ -169,36 +172,41 @@ class DeskPetApp {
   }
 
   setupEventListeners() {
-    const { video, btnSwitch, btnSettings } = this.elements;
+    const { btnSwitch, btnSettings } = this.elements;
 
-    video.addEventListener('loadeddata', () => {
-      console.log('[video] loadeddata 事件触发');
-      this.hideLoading();
-      this.isPlaying = true;
-      this.startChromaRender();
-    });
+    // 为两个 video 元素设置事件监听（双缓冲）
+    const setupVideoListeners = (videoEl) => {
+      videoEl.addEventListener('loadeddata', () => {
+        console.log('[video] loadeddata 事件触发');
+        this.hideLoading();
+        this.isPlaying = true;
+        this.startChromaRender();
+      });
 
-    video.addEventListener('error', (e) => {
-      this.hideLoading();
-      const error = e.target.error;
-      let errorMsg = '未知错误';
-      if (error) {
-        switch (error.code) {
-          case 1: errorMsg = 'MEDIA_ERR_ABORTED - 用户中止'; break;
-          case 2: errorMsg = 'MEDIA_ERR_NETWORK - 网络错误'; break;
-          case 3: errorMsg = 'MEDIA_ERR_DECODE - 解码错误'; break;
-          case 4: errorMsg = 'MEDIA_ERR_SRC_NOT_SUPPORTED - 格式不支持'; break;
+      videoEl.addEventListener('error', (e) => {
+        this.hideLoading();
+        const error = e.target.error;
+        let errorMsg = '未知错误';
+        if (error) {
+          switch (error.code) {
+            case 1: errorMsg = 'MEDIA_ERR_ABORTED - 用户中止'; break;
+            case 2: errorMsg = 'MEDIA_ERR_NETWORK - 网络错误'; break;
+            case 3: errorMsg = 'MEDIA_ERR_DECODE - 解码错误'; break;
+            case 4: errorMsg = 'MEDIA_ERR_SRC_NOT_SUPPORTED - 格式不支持'; break;
+          }
         }
-      }
-      this.log('error', '视频加载失败: ' + errorMsg, { code: error?.code, message: error?.message });
-    });
+        this.log('error', '视频加载失败: ' + errorMsg, { code: error?.code, message: error?.message });
+      });
 
-    video.addEventListener('ended', () => {
-      if (this.config.video.loop) {
-        video.currentTime = 0;
-        video.play();
-      }
-    });
+      videoEl.addEventListener('ended', () => {
+        if (this.config.video.loop) {
+          videoEl.currentTime = 0;
+          videoEl.play();
+        }
+      });
+    };
+    setupVideoListeners(this.elements.video);
+    setupVideoListeners(this.elements.videoAlt);
 
     btnSwitch.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -339,8 +347,12 @@ class DeskPetApp {
       canvas,
       ctx,
       enabled: true,
-      animationId: null
+      animationId: null,
+      // 复用的离屏 canvas，避免每帧创建导致 GC 闪烁
+      offscreenCanvas: document.createElement('canvas'),
+      offscreenCtx: null
     };
+    this.chromaKey.offscreenCtx = this.chromaKey.offscreenCanvas.getContext('2d');
     
     this.resizeCanvas();
   }
@@ -385,13 +397,13 @@ class DeskPetApp {
   }
 
   renderChromaFrame() {
-    if (!this.chromaKey || !this.elements.video) {
-      console.log('[renderChromaFrame] 跳过: chromaKey=', !!this.chromaKey, ', video=', !!this.elements.video);
+    if (!this.chromaKey || !this.activeVideo) {
+      console.log('[renderChromaFrame] 跳过: chromaKey=', !!this.chromaKey, ', activeVideo=', !!this.activeVideo);
       return;
     }
     
     const { canvas, ctx } = this.chromaKey;
-    const video = this.elements.video;
+    const video = this.activeVideo;
     const config = this.config?.video?.chromaKey;
     
     // 检查视频是否准备好
@@ -399,9 +411,6 @@ class DeskPetApp {
       console.log('[renderChromaFrame] 视频未准备好, readyState:', video.readyState);
       return;
     }
-    
-    // 清空画布
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     // 计算保持原比例的绘制尺寸
     const canvasRatio = canvas.width / canvas.height;
@@ -429,18 +438,24 @@ class DeskPetApp {
     }
     
     if (!config?.enabled) {
+      // 清空+绘制紧挨在一起，避免中间出现透明帧
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
       return;
     }
     
-    // 创建临时 canvas 来处理绿幕
-    const tempCanvas = document.createElement('canvas');
-    // 确保尺寸为整数且有效
+    // 复用离屏 canvas 处理绿幕（避免每帧创建新对象导致 GC 闪烁）
+    const tempCanvas = this.chromaKey.offscreenCanvas;
+    const tempCtx = this.chromaKey.offscreenCtx;
     const tempWidth = Math.max(1, Math.round(drawWidth));
     const tempHeight = Math.max(1, Math.round(drawHeight));
-    tempCanvas.width = tempWidth;
-    tempCanvas.height = tempHeight;
-    const tempCtx = tempCanvas.getContext('2d');
+    // 仅在尺寸变化时调整 canvas 大小
+    if (tempCanvas.width !== tempWidth || tempCanvas.height !== tempHeight) {
+      tempCanvas.width = tempWidth;
+      tempCanvas.height = tempHeight;
+    } else {
+      tempCtx.clearRect(0, 0, tempWidth, tempHeight);
+    }
     
     // 在临时 canvas 上绘制视频
     tempCtx.drawImage(video, 0, 0, tempWidth, tempHeight);
@@ -474,7 +489,8 @@ class DeskPetApp {
     
     tempCtx.putImageData(imageData, 0, 0);
     
-    // 将处理后的图像绘制到主 canvas
+    // 清空+绘制紧挨在一起，避免中间出现透明帧
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(tempCanvas, offsetX, offsetY);
   }
 
@@ -576,7 +592,7 @@ class DeskPetApp {
     this.petDirection = 'none';
 
     // 清除镜像翻转
-    this.elements.video.style.transform = '';
+    this.activeVideo.style.transform = '';
     this.elements.canvas.style.transform = '';
 
     // 播放坐着动画
@@ -599,7 +615,7 @@ class DeskPetApp {
     this.stopMoving();
 
     // 清除镜像翻转
-    this.elements.video.style.transform = '';
+    this.activeVideo.style.transform = '';
     this.elements.canvas.style.transform = '';
 
     // 随机选择一个坐着动画
@@ -669,12 +685,12 @@ class DeskPetApp {
       console.log('[宠物移动] 在安全区域，随机方向:', this.petDirection);
     }
 
-    // 播放对应动画
+    // 播放对应动画（等待加载完成后再移动）
     console.log('[startWalking] 准备播放动画，方向:', this.petDirection);
-    this.playDirectionAnimation();
+    await this.playDirectionAnimation();
 
-    // 开始移动
-    console.log('[startWalking] 准备开始移动');
+    // 动画就绪后开始移动
+    console.log('[startWalking] 动画就绪，开始移动');
     this.startMoving();
     this.scheduleNextBehavior();
   }
@@ -688,7 +704,7 @@ class DeskPetApp {
         const randomIndex = Math.floor(Math.random() * this.videoCategories.walkLeft.length);
         const videoIndex = this.videoCategories.walkLeft[randomIndex];
         this.playVideo(videoIndex);
-        this.elements.video.style.transform = '';
+        this.activeVideo.style.transform = '';
         this.elements.canvas.style.transform = '';
       } 
       // else if (this.videoCategories.walkRight.length > 0) {
@@ -697,7 +713,7 @@ class DeskPetApp {
       //   const randomIndex = Math.floor(Math.random() * this.videoCategories.walkRight.length);
       //   const videoIndex = this.videoCategories.walkRight[randomIndex];
       //   this.playVideo(videoIndex);
-      //   this.elements.video.style.transform = 'scaleX(-1)';
+      //   this.activeVideo.style.transform = 'scaleX(-1)';
       //   this.elements.canvas.style.transform = 'scaleX(-1)';
       // }
     } else {
@@ -706,7 +722,7 @@ class DeskPetApp {
         const randomIndex = Math.floor(Math.random() * this.videoCategories.walkRight.length);
         const videoIndex = this.videoCategories.walkRight[randomIndex];
         this.playVideo(videoIndex);
-        this.elements.video.style.transform = '';
+        this.activeVideo.style.transform = '';
         this.elements.canvas.style.transform = '';
       }
       // else if (this.videoCategories.walkLeft.length > 0) {
@@ -715,7 +731,7 @@ class DeskPetApp {
       //   const randomIndex = Math.floor(Math.random() * this.videoCategories.walkLeft.length);
       //   const videoIndex = this.videoCategories.walkLeft[randomIndex];
       //   this.playVideo(videoIndex);
-      //   this.elements.video.style.transform = 'scaleX(-1)';
+      //   this.activeVideo.style.transform = 'scaleX(-1)';
       //   this.elements.canvas.style.transform = 'scaleX(-1)';
       // }
     }
@@ -801,7 +817,7 @@ class DeskPetApp {
   }
 
   // 转身（改变方向）
-  turnAround() {
+  async turnAround() {
     console.log('[转身] 当前方向:', this.petDirection);
     // 停止当前移动
     this.stopMoving();
@@ -814,43 +830,43 @@ class DeskPetApp {
     }
     console.log('[转身] 新方向:', this.petDirection);
 
-    // 重新选择对应方向的动画
-    this.playDirectionAnimation();
+    // 等待新方向动画加载完成
+    await this.playDirectionAnimation();
 
     // 继续移动
     this.startMoving();
   }
 
-  // 播放对应方向的动画
-  playDirectionAnimation() {
+  // 播放对应方向的动画（返回 Promise 以支持等待加载完成）
+  async playDirectionAnimation() {
     if (this.petDirection === 'left') {
       if (this.videoCategories.walkLeft.length > 0) {
         const randomIndex = Math.floor(Math.random() * this.videoCategories.walkLeft.length);
         const videoIndex = this.videoCategories.walkLeft[randomIndex];
-        this.playVideo(videoIndex);
-        this.elements.video.style.transform = '';
+        await this.playVideo(videoIndex);
+        this.activeVideo.style.transform = '';
         this.elements.canvas.style.transform = '';
       } else if (this.videoCategories.walkRight.length > 0) {
         // 没有左走动画，使用右走并镜像翻转
         const randomIndex = Math.floor(Math.random() * this.videoCategories.walkRight.length);
         const videoIndex = this.videoCategories.walkRight[randomIndex];
-        this.playVideo(videoIndex);
-        this.elements.video.style.transform = 'scaleX(-1)';
+        await this.playVideo(videoIndex);
+        this.activeVideo.style.transform = 'scaleX(-1)';
         this.elements.canvas.style.transform = 'scaleX(-1)';
       }
     } else {
       if (this.videoCategories.walkRight.length > 0) {
         const randomIndex = Math.floor(Math.random() * this.videoCategories.walkRight.length);
         const videoIndex = this.videoCategories.walkRight[randomIndex];
-        this.playVideo(videoIndex);
-        this.elements.video.style.transform = '';
+        await this.playVideo(videoIndex);
+        this.activeVideo.style.transform = '';
         this.elements.canvas.style.transform = '';
       } else if (this.videoCategories.walkLeft.length > 0) {
         // 没有右走动画，使用左走并镜像翻转
         const randomIndex = Math.floor(Math.random() * this.videoCategories.walkLeft.length);
         const videoIndex = this.videoCategories.walkLeft[randomIndex];
-        this.playVideo(videoIndex);
-        this.elements.video.style.transform = 'scaleX(-1)';
+        await this.playVideo(videoIndex);
+        this.activeVideo.style.transform = 'scaleX(-1)';
         this.elements.canvas.style.transform = 'scaleX(-1)';
       }
     }
@@ -862,15 +878,59 @@ class DeskPetApp {
     index = index % this.videos.length;
     this.currentVideoIndex = index;
     
-    const video = this.videos[index];
-    this.showLoading();
+    const videoInfo = this.videos[index];
+    
+    // 双缓冲：使用非活跃的 video 元素加载新视频
+    const currentVideo = this.activeVideo || this.elements.video;
+    const nextVideo = (currentVideo === this.elements.video)
+      ? this.elements.videoAlt
+      : this.elements.video;
+    
+    // 仅在当前无视频播放时显示加载提示
+    if (currentVideo.readyState < 2) {
+      this.showLoading();
+    }
     
     try {
-      const videoPath = video.path.replace(/\\/g, '/');
-      this.elements.video.src = `file:///${videoPath}`;
-      this.elements.video.loop = this.config.video.loop;
-      await this.elements.video.play();
-      this.log('info', '视频加载成功', video.path);
+      const videoPath = videoInfo.path.replace(/\\/g, '/');
+      nextVideo.src = `file:///${videoPath}`;
+      nextVideo.loop = this.config.video.loop;
+      
+      // 等待新视频可以播放
+      await new Promise((resolve, reject) => {
+        if (nextVideo.readyState >= 3) {
+          resolve();
+          return;
+        }
+        const onCanPlay = () => {
+          nextVideo.removeEventListener('canplay', onCanPlay);
+          nextVideo.removeEventListener('error', onError);
+          resolve();
+        };
+        const onError = () => {
+          nextVideo.removeEventListener('canplay', onCanPlay);
+          nextVideo.removeEventListener('error', onError);
+          reject(new Error('视频加载失败'));
+        };
+        nextVideo.addEventListener('canplay', onCanPlay);
+        nextVideo.addEventListener('error', onError);
+      });
+      
+      await nextVideo.play();
+      
+      // 切换活跃 video（chromaKey 渲染自动切换到新 video）
+      this.activeVideo = nextVideo;
+      
+      // 停止旧 video 并释放资源
+      if (currentVideo && currentVideo !== nextVideo) {
+        currentVideo.pause();
+        currentVideo.removeAttribute('src');
+        currentVideo.load();
+      }
+      
+      this.hideLoading();
+      this.isPlaying = true;
+      this.log('info', '视频切换成功', videoInfo.path);
     } catch (error) {
       this.hideLoading();
       this.log('error', '播放视频失败: ' + (error.message || error), { name: error.name, message: error.message });
@@ -878,7 +938,7 @@ class DeskPetApp {
   }
 
   pauseVideo() {
-    this.elements.video.pause();
+    this.activeVideo.pause();
     this.isPlaying = false;
     this.updatePlayPauseIcon();
     this.stopChromaRender();
