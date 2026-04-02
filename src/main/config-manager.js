@@ -18,6 +18,7 @@ class ConfigManager {
         x: null,
         y: null,
         opacity: 1.0,
+        scale: 1.0,
         alwaysOnTop: true,
         clickThrough: false
       },

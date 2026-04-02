@@ -106,6 +106,17 @@ class DeskPetApp {
     if (config.animation?.idleAnimation) {
       this.startIdleAnimation();
     }
+    
+    // 应用缩放
+    if (config.window.scale !== undefined) {
+      this.applyScale(config.window.scale);
+    }
+  }
+  
+  applyScale(scale) {
+    // 缩放通过 CSS transform 实现
+    this.elements.videoContainer.style.transform = `scale(${scale})`;
+    this.elements.videoContainer.style.transformOrigin = 'center center';
   }
 
   setupEventListeners() {

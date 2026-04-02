@@ -24,8 +24,7 @@ class SettingsApp {
       chromaSimilarity: document.getElementById('chroma-similarity'),
       chromaSmoothness: document.getElementById('chroma-smoothness'),
       windowOpacity: document.getElementById('window-opacity'),
-      windowWidth: document.getElementById('window-width'),
-      windowHeight: document.getElementById('window-height'),
+      windowScale: document.getElementById('window-scale'),
       windowAlwaysTop: document.getElementById('window-always-top'),
       windowClickThrough: document.getElementById('window-click-through'),
       clickAction: document.getElementById('click-action'),
@@ -35,8 +34,7 @@ class SettingsApp {
       similarityValue: document.getElementById('similarity-value'),
       smoothnessValue: document.getElementById('smoothness-value'),
       opacityValue: document.getElementById('opacity-value'),
-      widthValue: document.getElementById('width-value'),
-      heightValue: document.getElementById('height-value'),
+      scaleValue: document.getElementById('scale-value'),
       btnSelectFolder: document.getElementById('btn-select-folder'),
       btnSave: document.getElementById('btn-save'),
       btnReset: document.getElementById('btn-reset'),
@@ -46,7 +44,7 @@ class SettingsApp {
   }
 
   setupEventListeners() {
-    const { chromaEnabled, chromaColor, chromaSimilarity, chromaSmoothness, windowOpacity, windowWidth, windowHeight, windowAlwaysTop, windowClickThrough } = this.elements;
+    const { chromaEnabled, chromaColor, chromaSimilarity, chromaSmoothness, windowOpacity, windowScale, windowAlwaysTop, windowClickThrough } = this.elements;
 
     this.elements.btnSelectFolder.addEventListener('click', () => this.selectVideoFolder());
     this.elements.btnSave.addEventListener('click', () => this.saveSettings());
@@ -68,8 +66,7 @@ class SettingsApp {
     
     // 窗口设置实时预览
     windowOpacity.addEventListener('input', () => { this.updateValueDisplays(); this.previewSettings(); });
-    windowWidth.addEventListener('input', () => { this.updateValueDisplays(); this.previewSettings(); });
-    windowHeight.addEventListener('input', () => { this.updateValueDisplays(); this.previewSettings(); });
+    windowScale.addEventListener('input', () => { this.updateValueDisplays(); this.previewSettings(); });
     windowAlwaysTop.addEventListener('change', () => this.previewSettings());
     windowClickThrough.addEventListener('change', () => this.previewSettings());
   }
@@ -101,8 +98,7 @@ class SettingsApp {
     this.elements.chromaSimilarity.value = cfg.video.chromaKey?.similarity || 0.4;
     this.elements.chromaSmoothness.value = cfg.video.chromaKey?.smoothness || 0.1;
     this.elements.windowOpacity.value = cfg.window.opacity || 1;
-    this.elements.windowWidth.value = cfg.window.width || 300;
-    this.elements.windowHeight.value = cfg.window.height || 400;
+    this.elements.windowScale.value = cfg.window.scale || 1;
     this.elements.windowAlwaysTop.checked = cfg.window.alwaysOnTop !== false;
     this.elements.windowClickThrough.checked = cfg.window.clickThrough || false;
     this.elements.clickAction.value = cfg.interaction?.singleClickAction || 'switch';
@@ -116,8 +112,7 @@ class SettingsApp {
     this.elements.similarityValue.textContent = this.elements.chromaSimilarity.value;
     this.elements.smoothnessValue.textContent = this.elements.chromaSmoothness.value;
     this.elements.opacityValue.textContent = Math.round(this.elements.windowOpacity.value * 100) + '%';
-    this.elements.widthValue.textContent = this.elements.windowWidth.value + 'px';
-    this.elements.heightValue.textContent = this.elements.windowHeight.value + 'px';
+    this.elements.scaleValue.textContent = Math.round(this.elements.windowScale.value * 100) + '%';
   }
 
   updateVideoSelect() {
@@ -159,8 +154,7 @@ class SettingsApp {
       },
       window: {
         opacity: parseFloat(this.elements.windowOpacity.value),
-        width: parseInt(this.elements.windowWidth.value),
-        height: parseInt(this.elements.windowHeight.value),
+        scale: parseFloat(this.elements.windowScale.value),
         alwaysOnTop: this.elements.windowAlwaysTop.checked,
         clickThrough: this.elements.windowClickThrough.checked
       },
@@ -201,9 +195,9 @@ class SettingsApp {
       },
       window: {
         opacity: parseFloat(this.elements.windowOpacity.value),
+        scale: parseFloat(this.elements.windowScale.value),
         alwaysOnTop: this.elements.windowAlwaysTop.checked,
         clickThrough: this.elements.windowClickThrough.checked
-        // 不传递 width 和 height，避免改变窗口大小
       },
       interaction: {
         singleClickAction: this.elements.clickAction.value,
@@ -261,8 +255,7 @@ class SettingsApp {
       },
       window: {
         opacity: 1,
-        width: 300,
-        height: 400,
+        scale: 1,
         alwaysOnTop: true,
         clickThrough: false
       },
@@ -282,8 +275,7 @@ class SettingsApp {
     this.elements.chromaSimilarity.value = defaultConfig.video.chromaKey.similarity;
     this.elements.chromaSmoothness.value = defaultConfig.video.chromaKey.smoothness;
     this.elements.windowOpacity.value = defaultConfig.window.opacity;
-    this.elements.windowWidth.value = defaultConfig.window.width;
-    this.elements.windowHeight.value = defaultConfig.window.height;
+    this.elements.windowScale.value = defaultConfig.window.scale;
     this.elements.windowAlwaysTop.checked = defaultConfig.window.alwaysOnTop;
     this.elements.windowClickThrough.checked = defaultConfig.window.clickThrough;
     this.elements.clickAction.value = defaultConfig.interaction.singleClickAction;

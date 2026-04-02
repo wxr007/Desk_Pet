@@ -377,6 +377,15 @@ class DeskPetApp {
     // 应用窗口设置
     this.mainWindow.setAlwaysOnTop(config.window.alwaysOnTop ?? true);
     this.mainWindow.setOpacity(config.window.opacity ?? 1.0);
+    
+    // 应用缩放
+    const scale = config.window.scale ?? 1.0;
+    const baseWidth = 300;
+    const baseHeight = 400;
+    const newWidth = Math.round(baseWidth * scale);
+    const newHeight = Math.round(baseHeight * scale);
+    this.mainWindow.setSize(newWidth, newHeight);
+    
     this.updateIgnoreMouseEvents();
     
     // 通知渲染进程更新
