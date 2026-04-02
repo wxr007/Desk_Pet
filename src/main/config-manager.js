@@ -8,13 +8,15 @@ const path = require('path');
 const { app } = require('electron');
 const log = require('electron-log');
 
+// 窗口基础大小常量
+const BASE_WIDTH = 300;
+const BASE_HEIGHT = 400;
+
 class ConfigManager {
   constructor() {
     this.configPath = path.join(app.getAppPath(), 'config', 'settings.json');
     this.defaultConfig = {
       window: {
-        width: 300,
-        height: 400,
         x: null,
         y: null,
         opacity: 1.0,
@@ -173,3 +175,5 @@ class ConfigManager {
 }
 
 module.exports = ConfigManager;
+module.exports.BASE_WIDTH = BASE_WIDTH;
+module.exports.BASE_HEIGHT = BASE_HEIGHT;

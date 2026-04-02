@@ -3,6 +3,10 @@
  * Renderer Process Main Application
  */
 
+// 窗口基础大小常量
+const BASE_WIDTH = 300;
+const BASE_HEIGHT = 400;
+
 class DeskPetApp {
   constructor() {
     this.config = null;
@@ -107,24 +111,16 @@ class DeskPetApp {
       this.startIdleAnimation();
     }
     
-    // 应用缩放
+    // 应用缩放 - 预览时调整窗口大小
     if (config.window.scale !== undefined) {
       this.applyScale(config.window.scale);
     }
   }
-  
+
   applyScale(scale) {
-    console.log('[applyScale] scale:', scale);
-    // 基础大小
-    const baseWidth = 300;
-    const baseHeight = 400;
-    
-    // 计算新的窗口大小
-    const newWidth = Math.round(baseWidth * scale);
-    const newHeight = Math.round(baseHeight * scale);
-    
-    console.log('[applyScale] 请求调整大小:', newWidth, newHeight);
-    // 调整窗口大小
+    const newWidth = Math.round(BASE_WIDTH * scale);
+    const newHeight = Math.round(BASE_HEIGHT * scale);
+    console.log('[applyScale] scale:', scale, 'size:', newWidth, 'x', newHeight);
     window.electronAPI.resizeWindow(newWidth, newHeight);
   }
 

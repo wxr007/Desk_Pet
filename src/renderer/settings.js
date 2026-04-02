@@ -1,4 +1,9 @@
 // 设置窗口脚本
+
+// 窗口基础大小常量
+const BASE_WIDTH = 300;
+const BASE_HEIGHT = 400;
+
 class SettingsApp {
   constructor() {
     this.config = null;
@@ -142,8 +147,7 @@ class SettingsApp {
 
   async saveSettings() {
     const scale = parseFloat(this.elements.windowScale.value);
-    const baseWidth = 300;
-    const baseHeight = 400;
+    console.log('[saveSettings] scale:', scale);
     
     const newConfig = {
       video: {
@@ -159,8 +163,6 @@ class SettingsApp {
       window: {
         opacity: parseFloat(this.elements.windowOpacity.value),
         scale: scale,
-        width: Math.round(baseWidth * scale),
-        height: Math.round(baseHeight * scale),
         alwaysOnTop: this.elements.windowAlwaysTop.checked,
         clickThrough: this.elements.windowClickThrough.checked
       },
@@ -178,6 +180,8 @@ class SettingsApp {
       const result = await window.electronAPI.saveConfig(newConfig);
       if (result.success) {
         console.log('配置保存成功');
+        // 更新原始配置，避免关闭窗口时恢复旧配置
+        this.config = newConfig;
         window.close();
       } else {
         console.error('保存配置失败:', result.error);
@@ -189,8 +193,6 @@ class SettingsApp {
 
   async previewSettings() {
     const scale = parseFloat(this.elements.windowScale.value);
-    const baseWidth = 300;
-    const baseHeight = 400;
     
     const previewConfig = {
       video: {
@@ -206,8 +208,7 @@ class SettingsApp {
       window: {
         opacity: parseFloat(this.elements.windowOpacity.value),
         scale: scale,
-        width: Math.round(baseWidth * scale),
-        height: Math.round(baseHeight * scale),
+        // 预览时不传递 width/height，由渲染进程根据 scale 计算
         alwaysOnTop: this.elements.windowAlwaysTop.checked,
         clickThrough: this.elements.windowClickThrough.checked
       },
