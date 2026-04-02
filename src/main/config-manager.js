@@ -38,8 +38,8 @@ class ConfigManager {
         }
       },
       animation: {
-        enabled: true,
-        idleAnimation: true,
+        enabled: false,
+        idleAnimation: false,
         idleInterval: 30,
         gsapEffects: {
           bounce: true,

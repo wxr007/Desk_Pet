@@ -108,6 +108,8 @@ class DeskPetApp {
     
     if (config.animation?.idleAnimation) {
       this.startIdleAnimation();
+    } else {
+      this.stopIdleAnimation();
     }
     
     // 应用缩放 - 预览时调整窗口大小
