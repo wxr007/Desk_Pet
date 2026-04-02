@@ -65,7 +65,6 @@ class DeskPetApp {
       dragArea: document.getElementById('drag-area'),
       controls: document.getElementById('controls'),
       loading: document.getElementById('loading'),
-      btnPlayPause: document.getElementById('btn-play-pause'),
       btnSwitch: document.getElementById('btn-switch'),
       btnSettings: document.getElementById('btn-settings')
     };
@@ -125,12 +124,11 @@ class DeskPetApp {
   }
 
   setupEventListeners() {
-    const { video, btnPlayPause, btnSwitch, btnSettings } = this.elements;
+    const { video, btnSwitch, btnSettings } = this.elements;
 
     video.addEventListener('loadeddata', () => {
       this.hideLoading();
       this.isPlaying = true;
-      this.updatePlayPauseIcon();
       this.startChromaRender();
     });
 
@@ -144,11 +142,6 @@ class DeskPetApp {
         video.currentTime = 0;
         video.play();
       }
-    });
-
-    btnPlayPause.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.togglePlayPause();
     });
 
     btnSwitch.addEventListener('click', (e) => {
@@ -169,7 +162,13 @@ class DeskPetApp {
     this.elements.app.addEventListener('click', (e) => {
       if (e.target.closest('.controls')) return;
       if (isDragging) return; // 如果正在拖动，不触发点击
-      
+
+      // 如果控制按钮显示，点击其他地方隐藏
+      if (!this.elements.controls.classList.contains('hidden')) {
+        this.hideControls();
+        return;
+      }
+
       if (clickTimer) {
         clearTimeout(clickTimer);
         clickTimer = null;
@@ -180,6 +179,12 @@ class DeskPetApp {
           this.handleSingleClick();
         }, 250);
       }
+    });
+
+    // 右键显示控制按钮
+    this.elements.app.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      this.showControls();
     });
     
     // 视频拖动功能
@@ -247,12 +252,7 @@ class DeskPetApp {
       document.addEventListener('mouseup', handleMouseUp);
     });
 
-    document.addEventListener('keydown', (e) => {
-      if (e.key === ' ') {
-        e.preventDefault();
-        this.togglePlayPause();
-      }
-    });
+
 
     window.addEventListener('resize', () => {
       console.log('[渲染进程] resize 事件触发，窗口大小:', window.innerWidth, window.innerHeight);
@@ -268,10 +268,6 @@ class DeskPetApp {
 
     window.electronAPI.onOpenSettings(() => {
       this.openSettings();
-    });
-
-    window.electronAPI.onTogglePlayPause(() => {
-      this.togglePlayPause();
     });
 
     window.electronAPI.onSwitchAnimation(() => {
@@ -337,9 +333,14 @@ class DeskPetApp {
     // 计算保持原比例的绘制尺寸
     const canvasRatio = canvas.width / canvas.height;
     const videoRatio = video.videoWidth / video.videoHeight;
-    
+
+    // 检查视频尺寸是否有效
+    if (!video.videoWidth || !video.videoHeight || !isFinite(videoRatio)) {
+      return;
+    }
+
     let drawWidth, drawHeight, offsetX, offsetY;
-    
+
     if (canvasRatio > videoRatio) {
       // 画布更宽，以高度为基准
       drawHeight = canvas.height;
@@ -361,15 +362,18 @@ class DeskPetApp {
     
     // 创建临时 canvas 来处理绿幕
     const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = drawWidth;
-    tempCanvas.height = drawHeight;
+    // 确保尺寸为整数且有效
+    const tempWidth = Math.max(1, Math.round(drawWidth));
+    const tempHeight = Math.max(1, Math.round(drawHeight));
+    tempCanvas.width = tempWidth;
+    tempCanvas.height = tempHeight;
     const tempCtx = tempCanvas.getContext('2d');
     
     // 在临时 canvas 上绘制视频
-    tempCtx.drawImage(video, 0, 0, drawWidth, drawHeight);
+    tempCtx.drawImage(video, 0, 0, tempWidth, tempHeight);
     
     // 获取图像数据
-    const imageData = tempCtx.getImageData(0, 0, drawWidth, drawHeight);
+    const imageData = tempCtx.getImageData(0, 0, tempWidth, tempHeight);
     const data = imageData.data;
     
     const targetColor = this.hexToRgb(config.color || '#00ff00');
@@ -478,20 +482,12 @@ class DeskPetApp {
     this.stopChromaRender();
   }
 
-  togglePlayPause() {
-    if (this.isPlaying) {
-      this.pauseVideo();
-    } else {
-      this.elements.video.play();
-      this.isPlaying = true;
-      this.updatePlayPauseIcon();
-      this.startChromaRender();
-    }
+  showControls() {
+    this.elements.controls.classList.remove('hidden');
   }
 
-  updatePlayPauseIcon() {
-    const icon = this.elements.btnPlayPause.querySelector('.icon');
-    icon.textContent = this.isPlaying ? '⏸' : '▶';
+  hideControls() {
+    this.elements.controls.classList.add('hidden');
   }
 
   switchVideo() {
