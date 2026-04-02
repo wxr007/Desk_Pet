@@ -316,6 +316,7 @@ class DeskPetApp {
     // 窗口控制
     // 拖动窗口
     ipcMain.handle('window-move', (event, { x, y }) => {
+      // console.log('[window-move] 移动到:', x, y);
       if (this.mainWindow) {
         // 保存期望的大小（首次拖动时，根据缩放计算）
         if (!this.expectedWindowSize) {
@@ -335,6 +336,7 @@ class DeskPetApp {
           width: this.expectedWindowSize.width,
           height: this.expectedWindowSize.height
         });
+        this.mainWindow.setPosition(Math.round(x), Math.round(y));
       }
     });
 

@@ -16,6 +16,17 @@ class DeskPetApp {
     this.chromaKey = null;
     this.gsap = null;
     this.elements = {};
+
+    // 动画状态管理
+    this.petState = 'idle'; // 'idle' | 'walking'
+    this.petDirection = 'none'; // 'left' | 'right' | 'none'
+    this.videoCategories = {
+      sit: [],    // 坐着动画
+      walkLeft: [],  // 向左走
+      walkRight: []  // 向右走
+    };
+    this.stateTimer = null;
+    this.isMoving = false;
   }
 
   async init() {
@@ -89,10 +100,44 @@ class DeskPetApp {
       this.videos = await window.electronAPI.getVideos();
       console.log(`找到 ${this.videos.length} 个视频:`, this.videos);
       this.log('info', `找到 ${this.videos.length} 个视频`, this.videos);
+
+      // 分类视频
+      this.categorizeVideos();
+
+      // 启动宠物自动行为
+      this.startPetBehavior();
     } catch (error) {
       console.error('加载视频列表失败:', error);
       this.log('error', '加载视频列表失败', error);
     }
+  }
+
+  // 根据文件名分类视频
+  categorizeVideos() {
+    this.videoCategories = {
+      sit: [],
+      walkLeft: [],
+      walkRight: []
+    };
+
+    for (let i = 0; i < this.videos.length; i++) {
+      const video = this.videos[i];
+      const name = video.name.toLowerCase();
+
+      if (name.includes('-坐')) {
+        this.videoCategories.sit.push(i);
+      } else if (name.includes('-走')) {
+        if (name.includes('-左')) {
+          this.videoCategories.walkLeft.push(i);
+        } else {
+          // 没有方向的走路动画，默认当作向右
+          this.videoCategories.walkRight.push(i);
+        }
+      }
+    }
+
+    console.log('视频分类:', this.videoCategories);
+    this.log('info', '视频分类完成', this.videoCategories);
   }
 
   applyConfig() {
@@ -454,6 +499,304 @@ class DeskPetApp {
     if (!this.gsap) return;
     this.gsap.killTweensOf(this.elements.canvas);
     this.elements.canvas.style.transform = '';
+  }
+
+  // 开始宠物自动行为循环
+  startPetBehavior() {
+    if (this.stateTimer) {
+      clearTimeout(this.stateTimer);
+    }
+    this.scheduleNextBehavior();
+  }
+
+  // 停止宠物行为
+  stopPetBehavior() {
+    if (this.stateTimer) {
+      clearTimeout(this.stateTimer);
+      this.stateTimer = null;
+    }
+    this.stopMoving();
+  }
+
+  // 安排下一个行为
+  scheduleNextBehavior() {
+    if (this.petState === 'idle') {
+      // 坐着状态，3-6秒后起来走走
+      const delay = 3000 + Math.random() * 3000;
+      this.stateTimer = setTimeout(() => {
+        this.startWalking();
+      }, delay);
+    } else {
+      // 走路状态，3-5秒后坐下
+      const delay = 3000 + Math.random() * 2000;
+      this.stateTimer = setTimeout(() => {
+        this.startSitting();
+      }, delay);
+    }
+  }
+
+  // 开始坐着
+  startSitting() {
+    this.petState = 'idle';
+    this.petDirection = 'none';
+    this.stopMoving();
+
+    // 清除镜像翻转
+    this.elements.video.style.transform = '';
+    this.elements.canvas.style.transform = '';
+
+    // 随机选择一个坐着动画
+    if (this.videoCategories.sit.length > 0) {
+      const randomIndex = Math.floor(Math.random() * this.videoCategories.sit.length);
+      const videoIndex = this.videoCategories.sit[randomIndex];
+      this.playVideo(videoIndex);
+    }
+
+    this.scheduleNextBehavior();
+  }
+
+  // 开始走路
+  async startWalking() {
+    // 随机选择方向
+    const hasLeft = this.videoCategories.walkLeft.length > 0;
+    const hasRight = this.videoCategories.walkRight.length > 0;
+
+    if (!hasLeft && !hasRight) {
+      // 没有走路动画，继续坐着
+      this.scheduleNextBehavior();
+      return;
+    }
+
+    // 获取当前位置和屏幕尺寸
+    let currentX = 0;
+    try {
+      const pos = await window.electronAPI.getWindowPosition();
+      currentX = pos.x;
+    } catch (error) {
+      console.error('获取位置失败:', error);
+    }
+
+    // 先设置默认方向，避免状态不一致
+    this.petDirection = hasRight ? 'right' : 'left';
+    this.petState = 'walking';
+
+    const screenWidth = window.screen.width;
+    const windowWidth = window.innerWidth;
+    const margin = 100; // 边界安全距离
+
+    // 根据位置智能选择方向
+    const tooCloseLeft = currentX < margin;
+    const tooCloseRight = currentX + windowWidth > screenWidth - margin;
+
+    if (tooCloseLeft && tooCloseRight) {
+      // 屏幕太小，随机选择
+      this.petDirection = Math.random() < 0.5 ? 'left' : 'right';
+      console.log('[宠物移动] 屏幕太小，随机方向:', this.petDirection);
+    } else if (tooCloseLeft) {
+      // 太靠近左边，向右移动
+      this.petDirection = 'right';
+      console.log('[宠物移动] 太靠近左边，选择向右移动');
+    } else if (tooCloseRight) {
+      // 太靠近右边，向左移动
+      this.petDirection = 'left';
+      console.log('[宠物移动] 太靠近右边，选择向左移动');
+    } else {
+      // 在安全区域，随机选择
+      if (hasLeft && hasRight) {
+        this.petDirection = Math.random() < 0.5 ? 'left' : 'right';
+      } else if (hasLeft) {
+        this.petDirection = 'left';
+      } else {
+        this.petDirection = 'right';
+      }
+      console.log('[宠物移动] 在安全区域，随机方向:', this.petDirection);
+    }
+
+    // 播放对应动画
+    console.log('[startWalking] 准备播放动画，方向:', this.petDirection);
+    this.playDirectionAnimation();
+
+    // 开始移动
+    console.log('[startWalking] 准备开始移动');
+    this.startMoving();
+    this.scheduleNextBehavior();
+  }
+
+  // 播放对应方向的动画
+  playDirectionAnimation() {
+    console.log('[playDirectionAnimation] 方向:', this.petDirection, '左动画数:', this.videoCategories.walkLeft.length, '右动画数:', this.videoCategories.walkRight.length);
+    if (this.petDirection === 'left') {
+      if (this.videoCategories.walkLeft.length > 0) {
+        console.log('[playDirectionAnimation] 使用左走动画');
+        const randomIndex = Math.floor(Math.random() * this.videoCategories.walkLeft.length);
+        const videoIndex = this.videoCategories.walkLeft[randomIndex];
+        this.playVideo(videoIndex);
+        this.elements.video.style.transform = '';
+        this.elements.canvas.style.transform = '';
+      } 
+      // else if (this.videoCategories.walkRight.length > 0) {
+      //   // 没有左走动画，使用右走并镜像翻转
+      //   console.log('[playDirectionAnimation] 没有左走动画，使用右走并镜像');
+      //   const randomIndex = Math.floor(Math.random() * this.videoCategories.walkRight.length);
+      //   const videoIndex = this.videoCategories.walkRight[randomIndex];
+      //   this.playVideo(videoIndex);
+      //   this.elements.video.style.transform = 'scaleX(-1)';
+      //   this.elements.canvas.style.transform = 'scaleX(-1)';
+      // }
+    } else {
+      if (this.videoCategories.walkRight.length > 0) {
+        console.log('[playDirectionAnimation] 使用右走动画');
+        const randomIndex = Math.floor(Math.random() * this.videoCategories.walkRight.length);
+        const videoIndex = this.videoCategories.walkRight[randomIndex];
+        this.playVideo(videoIndex);
+        this.elements.video.style.transform = '';
+        this.elements.canvas.style.transform = '';
+      }
+      // else if (this.videoCategories.walkLeft.length > 0) {
+      //   // 没有右走动画，使用左走并镜像翻转
+      //   console.log('[playDirectionAnimation] 没有右走动画，使用左走并镜像');
+      //   const randomIndex = Math.floor(Math.random() * this.videoCategories.walkLeft.length);
+      //   const videoIndex = this.videoCategories.walkLeft[randomIndex];
+      //   this.playVideo(videoIndex);
+      //   this.elements.video.style.transform = 'scaleX(-1)';
+      //   this.elements.canvas.style.transform = 'scaleX(-1)';
+      // }
+    }
+  }
+
+  // 开始移动窗口
+  startMoving() {
+    if (this.isMoving) {
+      console.log('[移动] 已经在移动中，跳过');
+      return;
+    }
+    this.isMoving = true;
+    console.log('[移动] 开始移动，方向:', this.petDirection);
+    this.moveStep();
+  }
+
+  // 停止移动
+  stopMoving() {
+    this.isMoving = false;
+  }
+
+  // 移动步进
+  async moveStep() {
+    if (!this.isMoving || this.petState !== 'walking') {
+      console.log('[移动] 停止移动，isMoving:', this.isMoving, 'petState:', this.petState);
+      return;
+    }
+
+    try {
+      const pos = await window.electronAPI.getWindowPosition();
+      const speed = 2; // 降低移动速度（像素/帧）
+      console.log('[移动] 当前位置:', pos.x, ', 方向:', this.petDirection);
+
+      // 获取屏幕尺寸
+      const screenWidth = window.screen.width;
+      const screenHeight = window.screen.height;
+      // 获取窗口尺寸
+      const windowWidth = window.innerWidth;
+      const windowHeight = window.innerHeight;
+
+      let newX = pos.x;
+      if (this.petDirection === 'left') {
+        newX -= speed;
+        // 防止走出左边界
+        if (newX < 0) {
+          newX = 0;
+          // 碰到边界就转身
+          this.turnAround();
+          return;
+        }
+      } else if (this.petDirection === 'right') {
+        newX += speed;
+        // 防止走出右边界
+        if (newX + windowWidth > screenWidth) {
+          newX = screenWidth - windowWidth;
+          console.log('[移动] 到达右边界，调整位置:', newX);
+          // 碰到边界就转身
+          this.turnAround();
+          return;
+        }
+      } else {
+        console.log('[移动] 未知方向:', this.petDirection, '不移动');
+        // 继续下一步
+        if (this.isMoving) {
+          requestAnimationFrame(() => this.moveStep());
+        }
+        return;
+      }
+
+      // 使用 moveWindow 移动
+      // console.log('[移动] 移动到:', newX, pos.y);
+      window.electronAPI.moveWindow(newX, pos.y);
+      const new_pos = await window.electronAPI.getWindowPosition();
+      // console.log('[移动] 移动到:', new_pos.x, new_pos.y,"窗口大小:",windowWidth,windowHeight);
+    } catch (error) {
+      console.error('移动失败:', error);
+    }
+
+    // 继续下一步
+    if (this.isMoving) {
+      requestAnimationFrame(() => this.moveStep());
+    }
+  }
+
+  // 转身（改变方向）
+  turnAround() {
+    console.log('[转身] 当前方向:', this.petDirection);
+    // 停止当前移动
+    this.stopMoving();
+
+    // 切换方向
+    if (this.petDirection === 'left') {
+      this.petDirection = 'right';
+    } else {
+      this.petDirection = 'left';
+    }
+    console.log('[转身] 新方向:', this.petDirection);
+
+    // 重新选择对应方向的动画
+    this.playDirectionAnimation();
+
+    // 继续移动
+    this.startMoving();
+  }
+
+  // 播放对应方向的动画
+  playDirectionAnimation() {
+    if (this.petDirection === 'left') {
+      if (this.videoCategories.walkLeft.length > 0) {
+        const randomIndex = Math.floor(Math.random() * this.videoCategories.walkLeft.length);
+        const videoIndex = this.videoCategories.walkLeft[randomIndex];
+        this.playVideo(videoIndex);
+        this.elements.video.style.transform = '';
+        this.elements.canvas.style.transform = '';
+      } else if (this.videoCategories.walkRight.length > 0) {
+        // 没有左走动画，使用右走并镜像翻转
+        const randomIndex = Math.floor(Math.random() * this.videoCategories.walkRight.length);
+        const videoIndex = this.videoCategories.walkRight[randomIndex];
+        this.playVideo(videoIndex);
+        this.elements.video.style.transform = 'scaleX(-1)';
+        this.elements.canvas.style.transform = 'scaleX(-1)';
+      }
+    } else {
+      if (this.videoCategories.walkRight.length > 0) {
+        const randomIndex = Math.floor(Math.random() * this.videoCategories.walkRight.length);
+        const videoIndex = this.videoCategories.walkRight[randomIndex];
+        this.playVideo(videoIndex);
+        this.elements.video.style.transform = '';
+        this.elements.canvas.style.transform = '';
+      } else if (this.videoCategories.walkLeft.length > 0) {
+        // 没有右走动画，使用左走并镜像翻转
+        const randomIndex = Math.floor(Math.random() * this.videoCategories.walkLeft.length);
+        const videoIndex = this.videoCategories.walkLeft[randomIndex];
+        this.playVideo(videoIndex);
+        this.elements.video.style.transform = 'scaleX(-1)';
+        this.elements.canvas.style.transform = 'scaleX(-1)';
+      }
+    }
   }
 
   async playVideo(index) {
