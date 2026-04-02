@@ -114,9 +114,18 @@ class DeskPetApp {
   }
   
   applyScale(scale) {
-    // 缩放通过 CSS transform 实现
-    this.elements.videoContainer.style.transform = `scale(${scale})`;
-    this.elements.videoContainer.style.transformOrigin = 'center center';
+    console.log('[applyScale] scale:', scale);
+    // 基础大小
+    const baseWidth = 300;
+    const baseHeight = 400;
+    
+    // 计算新的窗口大小
+    const newWidth = Math.round(baseWidth * scale);
+    const newHeight = Math.round(baseHeight * scale);
+    
+    console.log('[applyScale] 请求调整大小:', newWidth, newHeight);
+    // 调整窗口大小
+    window.electronAPI.resizeWindow(newWidth, newHeight);
   }
 
   setupEventListeners() {

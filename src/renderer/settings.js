@@ -141,6 +141,10 @@ class SettingsApp {
   }
 
   async saveSettings() {
+    const scale = parseFloat(this.elements.windowScale.value);
+    const baseWidth = 300;
+    const baseHeight = 400;
+    
     const newConfig = {
       video: {
         folder: this.elements.videoFolder.value,
@@ -154,7 +158,9 @@ class SettingsApp {
       },
       window: {
         opacity: parseFloat(this.elements.windowOpacity.value),
-        scale: parseFloat(this.elements.windowScale.value),
+        scale: scale,
+        width: Math.round(baseWidth * scale),
+        height: Math.round(baseHeight * scale),
         alwaysOnTop: this.elements.windowAlwaysTop.checked,
         clickThrough: this.elements.windowClickThrough.checked
       },
@@ -182,6 +188,10 @@ class SettingsApp {
   }
 
   async previewSettings() {
+    const scale = parseFloat(this.elements.windowScale.value);
+    const baseWidth = 300;
+    const baseHeight = 400;
+    
     const previewConfig = {
       video: {
         folder: this.elements.videoFolder.value,
@@ -195,7 +205,9 @@ class SettingsApp {
       },
       window: {
         opacity: parseFloat(this.elements.windowOpacity.value),
-        scale: parseFloat(this.elements.windowScale.value),
+        scale: scale,
+        width: Math.round(baseWidth * scale),
+        height: Math.round(baseHeight * scale),
         alwaysOnTop: this.elements.windowAlwaysTop.checked,
         clickThrough: this.elements.windowClickThrough.checked
       },

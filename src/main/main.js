@@ -232,7 +232,9 @@ class DeskPetApp {
     // 保存配置
     ipcMain.handle('save-config', async (event, config) => {
       try {
+        log.info('[save-config] 接收到的配置:', JSON.stringify(config.window));
         await this.configManager.update(config);
+        log.info('[save-config] 配置已更新到 configManager');
         this.applyConfig();
         return { success: true };
       } catch (error) {
@@ -244,6 +246,28 @@ class DeskPetApp {
     // 实时预览配置（不保存到文件）
     ipcMain.handle('preview-config', (event, config) => {
       try {
+        // 更新内存中的配置（不保存到文件）
+        if (config.window) {
+          if (config.window.scale !== undefined) {
+            this.configManager.set('window.scale', config.window.scale);
+          }
+          if (config.window.width !== undefined) {
+            this.configManager.set('window.width', config.window.width);
+          }
+          if (config.window.height !== undefined) {
+            this.configManager.set('window.height', config.window.height);
+          }
+          if (config.window.opacity !== undefined) {
+            this.configManager.set('window.opacity', config.window.opacity);
+          }
+          if (config.window.alwaysOnTop !== undefined) {
+            this.configManager.set('window.alwaysOnTop', config.window.alwaysOnTop);
+          }
+          if (config.window.clickThrough !== undefined) {
+            this.configManager.set('window.clickThrough', config.window.clickThrough);
+          }
+        }
+        
         // 只应用配置，不保存
         if (this.mainWindow) {
           this.mainWindow.webContents.send('config-updated', config);
@@ -289,12 +313,15 @@ class DeskPetApp {
     // 拖动窗口
     ipcMain.handle('window-move', (event, { x, y }) => {
       if (this.mainWindow) {
-        // 保存期望的大小（首次拖动时，从配置中获取）
+        // 保存期望的大小（首次拖动时，根据缩放计算）
         if (!this.expectedWindowSize) {
           const config = this.configManager.get();
+          const scale = config.window.scale ?? 1.0;
+          const baseWidth = 300;
+          const baseHeight = 400;
           this.expectedWindowSize = {
-            width: config.window.width,
-            height: config.window.height
+            width: Math.round(baseWidth * scale),
+            height: Math.round(baseHeight * scale)
           };
           const currentBounds = this.mainWindow.getBounds();
           console.log('[主进程] 拖动开始 - 当前大小:', currentBounds.width, currentBounds.height);
@@ -317,21 +344,40 @@ class DeskPetApp {
       if (this.mainWindow) {
         const config = this.configManager.get();
         const currentBounds = this.mainWindow.getBounds();
+        
+        // 根据缩放计算期望大小
+        const scale = config.window.scale ?? 1.0;
+        const baseWidth = 300;
+        const baseHeight = 400;
+        const expectedWidth = Math.round(baseWidth * scale);
+        const expectedHeight = Math.round(baseHeight * scale);
+        
         console.log('[主进程] 拖动结束当前大小:', currentBounds.width, currentBounds.height);
-        console.log('[主进程] 期望大小:', config.window.width, config.window.height);
+        console.log('[主进程] 期望大小:', expectedWidth, expectedHeight);
         
         // 恢复窗口大小
-        if (currentBounds.width !== config.window.width || currentBounds.height !== config.window.height) {
-          this.mainWindow.setSize(config.window.width, config.window.height);
-          console.log('[主进程] 恢复窗口大小到:', config.window.width, config.window.height);
+        if (currentBounds.width !== expectedWidth || currentBounds.height !== expectedHeight) {
+          this.mainWindow.setSize(expectedWidth, expectedHeight);
+          console.log('[主进程] 恢复窗口大小到:', expectedWidth, expectedHeight);
         }
       }
       this.expectedWindowSize = null;
     });
 
     ipcMain.handle('window-resize', (event, { width, height }) => {
+      log.info('[window-resize] 请求调整大小:', width, height);
       if (this.mainWindow) {
-        this.mainWindow.setSize(width, height);
+        const currentBounds = this.mainWindow.getBounds();
+        log.info('[window-resize] 当前大小:', currentBounds.width, currentBounds.height);
+        // 使用 setBounds 代替 setSize，因为 resizable: false 时 setSize 可能不生效
+        this.mainWindow.setBounds({
+          x: currentBounds.x,
+          y: currentBounds.y,
+          width: width,
+          height: height
+        });
+        const newBounds = this.mainWindow.getBounds();
+        log.info('[window-resize] 调整后大小:', newBounds.width, newBounds.height);
       }
     });
 
@@ -373,18 +419,36 @@ class DeskPetApp {
     if (!this.mainWindow) return;
     
     const config = this.configManager.get();
+    log.info('[applyConfig] 当前配置:', JSON.stringify(config.window));
     
     // 应用窗口设置
     this.mainWindow.setAlwaysOnTop(config.window.alwaysOnTop ?? true);
     this.mainWindow.setOpacity(config.window.opacity ?? 1.0);
     
-    // 应用缩放
-    const scale = config.window.scale ?? 1.0;
-    const baseWidth = 300;
-    const baseHeight = 400;
-    const newWidth = Math.round(baseWidth * scale);
-    const newHeight = Math.round(baseHeight * scale);
-    this.mainWindow.setSize(newWidth, newHeight);
+    // 应用缩放 - 优先使用配置中的 width/height，如果没有则根据 scale 计算
+    let newWidth, newHeight;
+    if (config.window.width && config.window.height) {
+      newWidth = config.window.width;
+      newHeight = config.window.height;
+      log.info('[applyConfig] 使用配置中的大小:', newWidth, newHeight);
+    } else {
+      const scale = config.window.scale ?? 1.0;
+      const baseWidth = 300;
+      const baseHeight = 400;
+      newWidth = Math.round(baseWidth * scale);
+      newHeight = Math.round(baseHeight * scale);
+      log.info('[applyConfig] 根据 scale 计算大小:', newWidth, newHeight);
+    }
+    
+    const currentBounds = this.mainWindow.getBounds();
+    log.info('[applyConfig] 当前窗口大小:', currentBounds.width, currentBounds.height);
+    
+    if (currentBounds.width !== newWidth || currentBounds.height !== newHeight) {
+      this.mainWindow.setSize(newWidth, newHeight);
+      log.info('[applyConfig] 设置新大小:', newWidth, newHeight);
+    } else {
+      log.info('[applyConfig] 大小相同，无需调整');
+    }
     
     this.updateIgnoreMouseEvents();
     
